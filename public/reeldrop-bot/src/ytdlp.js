@@ -9,14 +9,26 @@ export function spawnYtDlp(config, args, { timeoutMs, onStderr, signal } = {}) {
     "--newline",
     "--restrict-filenames",
     "--no-mtime",
-    "--socket-timeout",
-    "30",
-    "--retries",
-    "3",
-    "--fragment-retries",
-    "3",
-    "--user-agent",
-    config.userAgent,
+    "--no-part",                     // write directly — skip .part rename step
+
+    // ── YouTube: bypass datacenter IP bot detection ─────────────────────────
+    "--extractor-args",
+    config.cookiesFile
+      ? "youtube:player_client=web_embedded,mweb,android,web"
+      : "youtube:player_client=web_embedded,mweb,android",
+
+    // ── Speed: parallel fragment downloads ────────────────────────────────────
+    "--concurrent-fragments", "16",  // 16 chunks at once (YouTube DASH/HLS/m3u8)
+    "--buffer-size", "16K",          // per-connection read buffer
+    "--http-chunk-size", "10M",      // request 10 MB slices (fewer round-trips)
+
+    // ── Network: fast fail + aggressive retry ─────────────────────────────────
+    "--socket-timeout", "15",        // bail on stalled socket after 15 s
+    "--retries", "5",
+    "--fragment-retries", "10",      // retry broken fragment chunks hard
+    "--abort-on-unavailable-fragment",
+
+    ...(config.userAgent ? ["--user-agent", config.userAgent] : []),
     ...extra,
     ...args,
   ];

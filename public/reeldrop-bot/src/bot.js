@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { Telegraf } from "telegraf";
 import { cleanupDir, downloadMedia, formatDuration, probe } from "./downloader.js";
 import { E, PARSE_HTML, iconButton, iconKb, pe } from "./emoji.js";
+import { gramJsReady, gramJsSend } from "./gramjs-uploader.js";
 import { log } from "./logger.js";
 import { createQueue } from "./queue.js";
 import { assertSafeUrl, extractUrl } from "./urls.js";
@@ -13,9 +14,9 @@ const userAbort = new Map();
 
 function esc(value) {
   return String(value)
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/>/g, ">");
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function jobId() {
@@ -70,7 +71,7 @@ function welcomeHtml() {
     "",
     `${pe("link")} Send a video link from YouTube, TikTok, Instagram, X, Reddit, Vimeo, Facebook — or almost any other site yt-dlp knows.`,
     "",
-    `${pe("download")} I’ll fetch the file and send it back in this chat.`,
+    `${pe("download")} I'll fetch the file and send it back in this chat.`,
     "",
     `${pe("info")} <b>Commands</b>`,
     `${pe("plus")} /audio — extract MP3`,
@@ -78,7 +79,7 @@ function welcomeHtml() {
     `${pe("stop")} /cancel — stop the current job`,
     `${pe("help")} /help — this message`,
     "",
-    `${pe("lock")} Telegram bots cap uploads at ~50 MB. Pick 720p or 480p for long clips.`,
+    `${pe("lock")} ${gramJsReady() ? "Upload limit: ~2 GB via MTProto" : "Telegram bots cap uploads at ~50 MB. Pick 720p or 480p for long clips."}`,
   ].join("\n");
 }
 
@@ -86,7 +87,7 @@ function helpHtml() {
   return [
     `${pe("help")} <b>How it works</b>`,
     "",
-    `${pe("link")} Paste a link. That’s it.`,
+    `${pe("link")} Paste a link. That's it.`,
     `${pe("film")} Then pick Best / 1080p / 720p / 480p / MP3.`,
     `${pe("clock")} Default cap is 30 minutes. Live streams and playlists are skipped.`,
     `${pe("file")} One download at a time per person.`,
@@ -179,7 +180,7 @@ export function createBot(config) {
     if (!url) {
       if (ctx.chat.type !== "private") return;
       await ctx.reply(
-        `${pe("link")} I need an http(s) video link.\n${pe("help")} Tap Help if you’re stuck.`,
+        `${pe("link")} I need an http(s) video link.\n${pe("help")} Tap Help if you're stuck.`,
         PARSE_HTML,
       );
       return;
@@ -293,7 +294,7 @@ export function createBot(config) {
       return;
     }
     if (job.userId !== ctx.from.id) {
-      await ctx.answerCbQuery("This card isn’t yours.");
+      await ctx.answerCbQuery("This card isn't yours.");
       return;
     }
     jobs.delete(id);
@@ -331,12 +332,17 @@ export function createBot(config) {
         .catch(() => {});
     };
 
+    // Track temp dir separately so the finally block can always delete it,
+    // even if downloadMedia itself throws before returning the file object.
+    let tempDir = null;
+
     try {
       const file = await enqueue(() =>
         downloadMedia(config, {
           url,
           quality,
           signal: ac.signal,
+          isMtProto: gramJsReady(),
           onProgress: (pct) => {
             bump(
               `${pe("download")} ${esc(info.title)}\n${pe("percent")} ${pct}% · ${esc(qualityLabel(quality))}`,
@@ -344,6 +350,9 @@ export function createBot(config) {
           },
         }),
       );
+
+      // Capture dir as soon as we have a file — finally will clean it up
+      tempDir = file.dir;
 
       await ctx.telegram
         .editMessageText(
@@ -356,6 +365,34 @@ export function createBot(config) {
         .catch(() => {});
 
       const caption = `${pe("check")} <b>${esc(info.title)}</b>\n${pe("tag")} ${esc(qualityLabel(quality))} · ${esc(formatSize(file.size))}`;
+
+      // ── MTProto path (GramJS) — up to 2 GB ───────────────────────────────
+      if (gramJsReady()) {
+        try {
+          await gramJsSend({
+            filePath: file.path,
+            chatId: ctx.chat.id,
+            caption,
+            kind: file.kind,
+            meta: {
+              title: info.title,
+              width: info.width || 0,
+              height: info.height || 0,
+              duration: info.duration || 0,
+            },
+            onProgress: (pct) => bump(`${pe("pack")} Uploading… ${pct}%`),
+          });
+          await ctx.telegram.deleteMessage(ctx.chat.id, statusId).catch(() => {});
+          return; // finally block still runs → file deleted
+        } catch (uploadErr) {
+          log("error", "gramjs upload failed — falling back to Bot API", {
+            err: uploadErr.message,
+          });
+          // fall through to Bot API path
+        }
+      }
+
+      // ── Bot API path — 50 MB cap ──────────────────────────────────────────
       const source = { source: createReadStream(file.path) };
 
       try {
@@ -383,7 +420,6 @@ export function createBot(config) {
       }
 
       await ctx.telegram.deleteMessage(ctx.chat.id, statusId).catch(() => {});
-      await cleanupDir(file.dir);
     } catch (err) {
       log("error", "download failed", { err: err.message, user: ctx.from.id });
       await ctx.telegram
@@ -398,6 +434,11 @@ export function createBot(config) {
           await ctx.reply(`${pe("warn")} ${esc(cleanError(err))}`, PARSE_HTML);
         });
     } finally {
+      // Always delete the temp dir — success, upload error, download error, cancel
+      if (tempDir) {
+        await cleanupDir(tempDir);
+        log("info", "temp dir deleted", { dir: tempDir });
+      }
       userBusy.delete(ctx.from.id);
       userAbort.delete(ctx.from.id);
     }
@@ -430,9 +471,13 @@ function cleanError(err) {
   const msg = String(err.message || err);
   if (/Cancelled/i.test(msg)) return "Cancelled.";
   if (/timed out/i.test(msg)) return "That took too long. Try 480p or a shorter clip.";
-  if (/Unsupported URL|No video/i.test(msg)) return "yt-dlp doesn’t know that site or there’s no video there.";
-  if (/Private video|Sign in|login/i.test(msg))
-    return "This video is private or login-gated. A cookies.txt (COOKIES_B64) may help.";
+  if (/Unsupported URL|No video/i.test(msg)) return "yt-dlp doesn't know that site or there's no video there.";
+  if (/confirm you'?re not a bot|bot detection/i.test(msg))
+    return "YouTube bot check triggered by datacenter IP. A fresh cookies.txt (COOKIES_B64) with YouTube cookies helps.";
+  if (/Private video/i.test(msg))
+    return "This video is private. A cookies.txt (COOKIES_B64) from an account with access is required.";
+  if (/Sign in|login/i.test(msg))
+    return "This video is login-gated or requires sign-in. A cookies.txt (COOKIES_B64) may help.";
   if (/age/i.test(msg)) return "Age-gated. Set COOKIES_B64 from a logged-in browser.";
   return msg.slice(0, 400);
 }

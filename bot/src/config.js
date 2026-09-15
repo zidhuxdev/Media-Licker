@@ -86,8 +86,6 @@ export function loadConfig() {
     tgApiHash: process.env.TG_API_HASH?.trim() || "",
     tgSession: process.env.TG_SESSION?.trim() || "",
     tgSessionFile: process.env.TG_SESSION_FILE?.trim() || "",
-    userAgent:
-      process.env.USER_AGENT?.trim() ||
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    userAgent: process.env.USER_AGENT?.trim() || "",
   };
 }

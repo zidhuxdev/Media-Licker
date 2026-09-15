@@ -472,8 +472,12 @@ function cleanError(err) {
   if (/Cancelled/i.test(msg)) return "Cancelled.";
   if (/timed out/i.test(msg)) return "That took too long. Try 480p or a shorter clip.";
   if (/Unsupported URL|No video/i.test(msg)) return "yt-dlp doesn't know that site or there's no video there.";
-  if (/Private video|Sign in|login/i.test(msg))
-    return "This video is private or login-gated. A cookies.txt (COOKIES_B64) may help.";
+  if (/confirm you'?re not a bot|bot detection/i.test(msg))
+    return "YouTube bot check triggered by datacenter IP. A fresh cookies.txt (COOKIES_B64) with YouTube cookies helps.";
+  if (/Private video/i.test(msg))
+    return "This video is private. A cookies.txt (COOKIES_B64) from an account with access is required.";
+  if (/Sign in|login/i.test(msg))
+    return "This video is login-gated or requires sign-in. A cookies.txt (COOKIES_B64) may help.";
   if (/age/i.test(msg)) return "Age-gated. Set COOKIES_B64 from a logged-in browser.";
   return msg.slice(0, 400);
 }

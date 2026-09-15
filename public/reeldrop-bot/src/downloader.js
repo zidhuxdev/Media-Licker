@@ -63,7 +63,7 @@ async function newestFile(dir) {
   return withStat[0].path;
 }
 
-export async function downloadMedia(config, { url, quality, onProgress, signal }) {
+export async function downloadMedia(config, { url, quality, onProgress, signal, isMtProto = false }) {
   const dir = await mkdtemp(join(tmpdir(), "reeldrop-"));
   const maxBytes = Math.floor(config.maxFileMb * 1024 * 1024);
   const isAudio = quality === "audio";
@@ -108,9 +108,10 @@ export async function downloadMedia(config, { url, quality, onProgress, signal }
       },
     });
     const raw = await newestFile(dir);
-    const ready = isAudio ? raw : await ensureMp4UnderLimit(config, raw, maxBytes);
+    // Only run ffmpeg compression when using the Bot API (50 MB cap)
+    const ready = (isAudio || isMtProto) ? raw : await ensureMp4UnderLimit(config, raw, maxBytes);
     const s = await stat(ready);
-    if (s.size > maxBytes) {
+    if (!isMtProto && s.size > maxBytes) {
       throw new Error(`File is still ${Math.ceil(s.size / 1024 / 1024)} MB after compression.`);
     }
     const ext = ready.split(".").pop()?.toLowerCase() || "mp4";

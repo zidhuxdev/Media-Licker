@@ -11,9 +11,21 @@ const config = loadConfig();
 
 if (config.cookiesB64 && !config.cookiesFile) {
   const path = join(tmpdir(), "reeldrop-cookies.txt");
-  await writeFile(path, Buffer.from(config.cookiesB64, "base64"));
+  let content;
+  const raw = config.cookiesB64.trim();
+  if (raw.includes("Netscape") || raw.includes("# HTTP Cookie") || raw.includes("\t")) {
+    content = Buffer.from(raw, "utf8");
+  } else {
+    content = Buffer.from(raw.replace(/\s+/g, ""), "base64");
+  }
+  await writeFile(path, content);
   config.cookiesFile = path;
-  log("info", "wrote cookies from COOKIES_B64");
+  const str = content.toString("utf8");
+  const hasYt = str.includes("youtube.com") || str.includes(".google.com");
+  log("info", "wrote cookies from COOKIES_B64", {
+    bytes: content.length,
+    hasYouTubeCookies: hasYt,
+  });
 }
 
 // Initialise MTProto user client (optional — enables 2 GB uploads)
