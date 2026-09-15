@@ -2,6 +2,7 @@ import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureMp4UnderLimit } from "./ffmpeg.js";
+import { log } from "./logger.js";
 import { parsePercent, spawnYtDlp } from "./ytdlp.js";
 
 const FORMATS = {
@@ -98,11 +99,33 @@ export function estimateQualitySizes(info) {
 }
 
 export async function probe(config, url) {
-  const { stdout } = await spawnYtDlp(
-    config,
-    ["--dump-single-json", "--skip-download", "--", url],
-    { timeoutMs: 45_000 },
-  );
+  let stdout;
+  try {
+    const res = await spawnYtDlp(
+      config,
+      ["--dump-single-json", "--skip-download", "--", url],
+      { timeoutMs: 45_000 },
+    );
+    stdout = res.stdout;
+  } catch (err) {
+    if (
+      config.cookiesFile &&
+      /HTTP Error 410|410: Gone|HTTP Error 403|403: Forbidden/i.test(err.message)
+    ) {
+      log("warn", "probe failed with cookies (expired session) — retrying without cookies", {
+        err: err.message,
+      });
+      const noCookiesConfig = { ...config, cookiesFile: "" };
+      const res = await spawnYtDlp(
+        noCookiesConfig,
+        ["--dump-single-json", "--skip-download", "--", url],
+        { timeoutMs: 45_000 },
+      );
+      stdout = res.stdout;
+    } else {
+      throw err;
+    }
+  }
   const info = JSON.parse(stdout);
   if (info.is_live) {
     throw new Error("Live streams are not supported.");
@@ -174,8 +197,8 @@ export async function downloadMedia(
       ];
 
   let lastPct = -1;
-  try {
-    await spawnYtDlp(config, args, {
+  const runYtDlp = (cfg) =>
+    spawnYtDlp(cfg, args, {
       signal,
       onStderr: (chunk) => {
         const pct = parsePercent(chunk);
@@ -186,6 +209,24 @@ export async function downloadMedia(
         }
       },
     });
+
+  try {
+    try {
+      await runYtDlp(config);
+    } catch (err) {
+      if (
+        config.cookiesFile &&
+        /HTTP Error 410|410: Gone|HTTP Error 403|403: Forbidden/i.test(err.message)
+      ) {
+        log("warn", "download failed with cookies (expired session) — retrying without cookies", {
+          err: err.message,
+        });
+        const noCookiesConfig = { ...config, cookiesFile: "" };
+        await runYtDlp(noCookiesConfig);
+      } else {
+        throw err;
+      }
+    }
     const raw = await newestFile(dir);
     // Only run ffmpeg compression when using standard Bot API (50 MB cap)
     const ready =

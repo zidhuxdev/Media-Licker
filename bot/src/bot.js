@@ -514,6 +514,8 @@ function cleanError(err) {
   if (/Unsupported URL|No video/i.test(msg)) return "yt-dlp doesn't know that site or there's no video there.";
   if (/message to edit not found/i.test(msg)) return "Could not update status. Please try sending the link again.";
   if (/message is not modified/i.test(msg)) return "";
+  if (/HTTP Error 410|410: Gone/i.test(msg))
+    return "This video stream expired or was removed (410: Gone). If using COOKIES_B64, your cookies may have expired.";
   if (/confirm you'?re not a bot|bot detection/i.test(msg))
     return "YouTube bot check triggered by datacenter IP. A fresh cookies.txt (COOKIES_B64) with YouTube cookies helps.";
   if (/Private video/i.test(msg))
