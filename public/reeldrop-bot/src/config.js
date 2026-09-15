@@ -92,6 +92,7 @@ export function loadConfig() {
     downloadTimeoutMs: num("DOWNLOAD_TIMEOUT_MS", 180_000),
     ytdlpPath: process.env.YTDLP_PATH?.trim() || "yt-dlp",
     ffmpegPath: process.env.FFMPEG_PATH?.trim() || "ffmpeg",
+    ffprobePath: process.env.FFPROBE_PATH?.trim() || "ffprobe",
     cookiesFile: process.env.COOKIES_FILE?.trim() || "",
     cookiesB64: process.env.COOKIES_B64?.trim() || "",
     extraYtdlpArgs: process.env.EXTRA_YTDLP_ARGS?.trim() || "",

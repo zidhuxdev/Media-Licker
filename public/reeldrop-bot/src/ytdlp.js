@@ -10,6 +10,7 @@ export function spawnYtDlp(config, args, { timeoutMs, onStderr, signal } = {}) {
     "--restrict-filenames",
     "--no-mtime",
     "--no-part",                     // write directly — skip .part rename step
+    "--ppa", "Merger+ffmpeg:-movflags +faststart", // put moov atom at start for instant streaming
 
     // ── YouTube: bypass datacenter IP bot detection ─────────────────────────
     "--extractor-args",

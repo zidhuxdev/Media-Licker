@@ -1,16 +1,16 @@
 import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureMp4UnderLimit } from "./ffmpeg.js";
+import { ensureCompatibleVideo } from "./ffmpeg.js";
 import { log } from "./logger.js";
 import { parsePercent, spawnYtDlp } from "./ytdlp.js";
 
 const FORMATS = {
-  best: "bv*[height<=1080]+ba/b[height<=1080]/b",
-  "1080": "bv*[height<=1080]+ba/b[height<=1080]/b",
-  "720": "bv*[height<=720]+ba/b[height<=720]/b",
-  "480": "bv*[height<=480]+ba/b[height<=480]/b",
-  "360": "bv*[height<=360]+ba/b[height<=360]/b",
+  best: "bv*[vcodec^=avc1][height<=1080]+ba[acodec^=mp4a]/bv*[vcodec^=avc1][height<=1080]+ba/bv*[height<=1080]+ba/b[height<=1080]/b",
+  "1080": "bv*[vcodec^=avc1][height<=1080]+ba[acodec^=mp4a]/bv*[vcodec^=avc1][height<=1080]+ba/bv*[height<=1080]+ba/b[height<=1080]/b",
+  "720": "bv*[vcodec^=avc1][height<=720]+ba[acodec^=mp4a]/bv*[vcodec^=avc1][height<=720]+ba/bv*[height<=720]+ba/b[height<=720]/b",
+  "480": "bv*[vcodec^=avc1][height<=480]+ba[acodec^=mp4a]/bv*[vcodec^=avc1][height<=480]+ba/bv*[height<=480]+ba/b[height<=480]/b",
+  "360": "bv*[vcodec^=avc1][height<=360]+ba[acodec^=mp4a]/bv*[vcodec^=avc1][height<=360]+ba/bv*[height<=360]+ba/b[height<=360]/b",
   audio: "ba/b",
 };
 
@@ -228,9 +228,9 @@ export async function downloadMedia(
       }
     }
     const raw = await newestFile(dir);
-    // Only run ffmpeg compression when using standard Bot API (50 MB cap)
-    const ready =
-      isAudio || isHighLimit ? raw : await ensureMp4UnderLimit(config, raw, maxBytes);
+    const ready = isAudio
+      ? raw
+      : await ensureCompatibleVideo(config, raw, { maxBytes, isHighLimit });
     const s = await stat(ready);
     if (!isHighLimit && s.size > maxBytes) {
       throw new Error(`File is still ${Math.ceil(s.size / 1024 / 1024)} MB after compression.`);
