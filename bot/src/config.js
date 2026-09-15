@@ -63,7 +63,13 @@ export function loadConfig() {
     .trim()
     .replace(/\/$/, "");
 
-  const isLocalBotApi = Boolean(apiRoot && !apiRoot.includes("api.telegram.org"));
+  let bgutilPotUrl = (process.env.BGUTIL_POT_URL || "").trim();
+  if (bgutilPotUrl === "true" || bgutilPotUrl === "1") {
+    bgutilPotUrl = "http://127.0.0.1:4416";
+  } else if (bgutilPotUrl && !bgutilPotUrl.startsWith("http://") && !bgutilPotUrl.startsWith("https://")) {
+    bgutilPotUrl = `http://${bgutilPotUrl}`;
+  }
+
   const hasMtProto = Boolean(
     process.env.TG_API_ID && process.env.TG_API_HASH && process.env.TG_SESSION,
   );
@@ -74,6 +80,7 @@ export function loadConfig() {
     webhookUrl: webhook,
     apiRoot,
     isLocalBotApi,
+    bgutilPotUrl,
     httpsAgent: new https.Agent({ family: 4, keepAlive: true }),
     allowedUserIds: list("ALLOWED_USER_IDS").map((id) => String(id)),
     // If Custom Bot API or MTProto is active, default upload limit to 1900 MB (~2 GB limit)

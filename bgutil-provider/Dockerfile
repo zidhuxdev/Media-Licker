@@ -1,0 +1,3 @@
+FROM brainicism/bgutil-ytdlp-pot-provider:latest
+
+EXPOSE 4416

@@ -13,9 +13,15 @@ export function spawnYtDlp(config, args, { timeoutMs, onStderr, signal } = {}) {
 
     // ── YouTube: bypass datacenter IP bot detection ─────────────────────────
     "--extractor-args",
-    config.cookiesFile
-      ? "youtube:player_client=web_embedded,mweb,android,web"
-      : "youtube:player_client=web_embedded,mweb,android",
+    config.bgutilPotUrl
+      ? "youtube:player_client=web,mweb,android,web_embedded"
+      : config.cookiesFile
+        ? "youtube:player_client=web_embedded,mweb,android,web"
+        : "youtube:player_client=web_embedded,mweb,android",
+
+    ...(config.bgutilPotUrl
+      ? ["--extractor-args", `youtubepot-bgutilhttp:base_url=${config.bgutilPotUrl}`]
+      : []),
 
     // ── Speed: parallel fragment downloads ────────────────────────────────────
     "--concurrent-fragments", "16",  // 16 chunks at once (YouTube DASH/HLS/m3u8)
