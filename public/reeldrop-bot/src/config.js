@@ -69,6 +69,7 @@ export function loadConfig() {
   } else if (bgutilPotUrl && !bgutilPotUrl.startsWith("http://") && !bgutilPotUrl.startsWith("https://")) {
     bgutilPotUrl = `http://${bgutilPotUrl}`;
   }
+  bgutilPotUrl = bgutilPotUrl.replace(/\/+$/, "");
 
   const hasMtProto = Boolean(
     process.env.TG_API_ID && process.env.TG_API_HASH && process.env.TG_SESSION,
