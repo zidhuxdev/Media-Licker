@@ -71,7 +71,12 @@ function qualityKeyboard(id, sizes = {}) {
   };
 }
 
-function welcomeHtml() {
+function welcomeHtml(config) {
+  const limitLabel = config?.isLocalBotApi
+    ? `Upload limit: ~${Math.round((config.maxFileMb || 1900) / 1000 * 10) / 10} GB via Custom Bot API Server`
+    : gramJsReady()
+      ? "Upload limit: ~2 GB via MTProto"
+      : "Telegram bots cap uploads at ~50 MB. Pick 720p or 480p for long clips.";
   return [
     `${pe("spark")} <b>ReelDrop</b>`,
     "",
@@ -85,7 +90,7 @@ function welcomeHtml() {
     `${pe("stop")} /cancel — stop the current job`,
     `${pe("help")} /help — this message`,
     "",
-    `${pe("lock")} ${gramJsReady() ? "Upload limit: ~2 GB via MTProto" : "Telegram bots cap uploads at ~50 MB. Pick 720p or 480p for long clips."}`,
+    `${pe("lock")} ${limitLabel}`,
   ].join("\n");
 }
 
@@ -143,7 +148,7 @@ export function createBot(config) {
   });
 
   bot.start(async (ctx) => {
-    await ctx.reply(welcomeHtml(), { ...PARSE_HTML, reply_markup: mainKeyboard() });
+    await ctx.reply(welcomeHtml(config), { ...PARSE_HTML, reply_markup: mainKeyboard() });
   });
 
   bot.help(async (ctx) => {
@@ -359,6 +364,7 @@ export function createBot(config) {
           quality,
           signal: ac.signal,
           isMtProto: gramJsReady(),
+          isLocalBotApi: config.isLocalBotApi,
           onProgress: (pct) => {
             bump(
               `${pe("download")} ${esc(info.title)}\n${pe("percent")} ${pct}% · ${esc(qualityLabel(quality))}`,

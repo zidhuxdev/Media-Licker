@@ -63,16 +63,22 @@ export function loadConfig() {
     .trim()
     .replace(/\/$/, "");
 
+  const isLocalBotApi = Boolean(apiRoot && !apiRoot.includes("api.telegram.org"));
+  const hasMtProto = Boolean(
+    process.env.TG_API_ID && process.env.TG_API_HASH && process.env.TG_SESSION,
+  );
+
   return {
     token,
     port,
     webhookUrl: webhook,
     apiRoot,
+    isLocalBotApi,
     httpsAgent: new https.Agent({ family: 4, keepAlive: true }),
     allowedUserIds: list("ALLOWED_USER_IDS").map((id) => String(id)),
-    // If MTProto creds are set, default the cap to 1900 MB (MTProto 2 GB limit)
-    // otherwise stay at the Bot API safe 49 MB. Always overrideable via MAX_FILE_MB.
-    maxFileMb: num("MAX_FILE_MB", process.env.TG_API_ID && process.env.TG_API_HASH && process.env.TG_SESSION ? 1900 : 49),
+    // If Custom Bot API or MTProto is active, default upload limit to 1900 MB (~2 GB limit)
+    // otherwise stay at standard Bot API 49 MB limit. Always overrideable via MAX_FILE_MB.
+    maxFileMb: num("MAX_FILE_MB", isLocalBotApi || hasMtProto ? 1900 : 49),
     maxDurationSec: num("MAX_DURATION_SEC", 1800),
     concurrency: Math.max(1, num("CONCURRENCY", 2)),
     downloadTimeoutMs: num("DOWNLOAD_TIMEOUT_MS", 180_000),

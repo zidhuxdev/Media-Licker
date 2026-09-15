@@ -1,3 +1,4 @@
+import http from "node:http";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,8 +34,17 @@ await initGramJs(config);
 
 const bot = createBot(config);
 bot.telegram.options.apiRoot = config.apiRoot;
-bot.telegram.options.agent = config.httpsAgent;
+bot.telegram.options.agent = config.apiRoot.startsWith("http://")
+  ? new http.Agent({ keepAlive: true })
+  : config.httpsAgent;
 bot.telegram.options.webhookReply = false;
+
+if (config.isLocalBotApi) {
+  log("info", "using custom Telegram Bot API server", {
+    apiRoot: config.apiRoot,
+    maxFileMb: config.maxFileMb,
+  });
+}
 
 const server = createServer({ config, bot });
 
@@ -47,6 +57,9 @@ function explainTelegramError(err) {
   const msg = res?.message || res?.description || err?.message || "unknown";
   const code = res?.code || res?.error_code;
   if (msg === "Application not found" || res?.request_id) {
+    if (config.isLocalBotApi) {
+      return `404 from custom Bot API server at ${config.apiRoot}. Verify your telegram-bot-api Railway service is running and has a domain or internal URL configured.`;
+    }
     return "This 404 is Railway's edge, not Telegram. BOT_TOKEN is invalid or the client is not calling https://api.telegram.org. Paste the token from @BotFather with no quotes, no bot prefix, no semicolon. BOT_TOKEN must not be a Railway URL.";
   }
   if (code === 401 || /unauthorized/i.test(String(msg))) {
