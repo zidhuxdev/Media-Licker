@@ -231,13 +231,15 @@ export function createBot(config) {
     try {
       const info = await probe(config, href);
       if (forcedQuality) {
-        await ctx.telegram.editMessageText(
-          ctx.chat.id,
-          status.message_id,
-          undefined,
-          `${pe("quote")} <b>${esc(info.title)}</b>\n${pe("mic")} Extracting audio…`,
-          PARSE_HTML,
-        );
+        await ctx.telegram
+          .editMessageText(
+            ctx.chat.id,
+            status.message_id,
+            undefined,
+            `${pe("quote")} <b>${esc(info.title)}</b>\n${pe("mic")} Extracting audio…`,
+            PARSE_HTML,
+          )
+          .catch(() => {});
         await runDownload(ctx, {
           url: href,
           quality: forcedQuality,
@@ -255,39 +257,53 @@ export function createBot(config) {
       });
 
       const caption = infoCard(info);
-      try {
-        if (info.thumbnail && /^https?:/i.test(info.thumbnail)) {
-          await ctx.telegram.deleteMessage(ctx.chat.id, status.message_id).catch(() => {});
+      let sentPhoto = false;
+      if (info.thumbnail && /^https?:/i.test(info.thumbnail)) {
+        try {
           await ctx.replyWithPhoto(info.thumbnail, {
             caption,
             ...PARSE_HTML,
             reply_markup: qualityKeyboard(id, info.sizes),
           });
+          sentPhoto = true;
+          // Delete status message only AFTER replyWithPhoto succeeds!
+          await ctx.telegram.deleteMessage(ctx.chat.id, status.message_id).catch(() => {});
           return;
+        } catch {
+          /* Thumbnail failed to send (e.g. invalid format or 400) — status message is still intact */
         }
-      } catch {
-        /* fall through to text card */
       }
 
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        status.message_id,
-        undefined,
-        caption,
-        { ...PARSE_HTML, reply_markup: qualityKeyboard(id, info.sizes) },
-      );
+      if (!sentPhoto) {
+        await ctx.telegram
+          .editMessageText(
+            ctx.chat.id,
+            status.message_id,
+            undefined,
+            caption,
+            { ...PARSE_HTML, reply_markup: qualityKeyboard(id, info.sizes) },
+          )
+          .catch(async () => {
+            await ctx.reply(caption, {
+              ...PARSE_HTML,
+              reply_markup: qualityKeyboard(id, info.sizes),
+            }).catch(() => {});
+          });
+      }
     } catch (err) {
       log("error", "probe failed", { err: err.message });
+      const userErr = cleanError(err);
+      if (!userErr) return;
       await ctx.telegram
         .editMessageText(
           ctx.chat.id,
           status.message_id,
           undefined,
-          `${pe("warn")} ${esc(cleanError(err))}`,
+          `${pe("warn")} ${esc(userErr)}`,
           PARSE_HTML,
         )
         .catch(async () => {
-          await ctx.reply(`${pe("warn")} ${esc(cleanError(err))}`, PARSE_HTML);
+          await ctx.reply(`${pe("warn")} ${esc(userErr)}`, PARSE_HTML).catch(() => {});
         });
     }
   }
@@ -492,10 +508,12 @@ function filenameFor(title, ext) {
 }
 
 function cleanError(err) {
-  const msg = String(err.message || err);
+  const msg = String(err?.message || err);
   if (/Cancelled/i.test(msg)) return "Cancelled.";
   if (/timed out/i.test(msg)) return "That took too long. Try 480p or a shorter clip.";
   if (/Unsupported URL|No video/i.test(msg)) return "yt-dlp doesn't know that site or there's no video there.";
+  if (/message to edit not found/i.test(msg)) return "Could not update status. Please try sending the link again.";
+  if (/message is not modified/i.test(msg)) return "";
   if (/confirm you'?re not a bot|bot detection/i.test(msg))
     return "YouTube bot check triggered by datacenter IP. A fresh cookies.txt (COOKIES_B64) with YouTube cookies helps.";
   if (/Private video/i.test(msg))
