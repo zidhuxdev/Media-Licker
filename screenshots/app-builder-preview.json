@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "ReelDrop",
+      "hasCanvas": false,
+      "bodyTextLen": 1261,
+      "bodyTextHash": "1339560ef8f5d059e38c4b48f53e342a72d045ed89e87c213f46bf65432157bb",
+      "bodyTextPrefix": "ReelDrop Demo Railway Source TELEGRAM BOT · RAILWAY Any link. Th",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "ReelDrop",
+      "hasCanvas": false,
+      "bodyTextLen": 1261,
+      "bodyTextHash": "1339560ef8f5d059e38c4b48f53e342a72d045ed89e87c213f46bf65432157bb",
+      "bodyTextPrefix": "ReelDrop Demo Railway Source TELEGRAM BOT · RAILWAY Any link. Th",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
