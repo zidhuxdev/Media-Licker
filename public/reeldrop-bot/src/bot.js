@@ -46,19 +46,25 @@ function mainKeyboard() {
   };
 }
 
-function qualityKeyboard(id) {
+function qualityKeyboard(id, sizes = {}) {
+  const bestLabel = sizes.best ? `Best · ${sizes.best}` : "Best";
+  const p1080Label = sizes["1080"] ? `1080p · ${sizes["1080"]}` : "1080p";
+  const p720Label = sizes["720"] ? `720p · ${sizes["720"]}` : "720p";
+  const p480Label = sizes["480"] ? `480p · ${sizes["480"]}` : "480p";
+  const audioLabel = sizes.audio ? `MP3 · ${sizes.audio}` : "MP3 audio";
+
   return {
     inline_keyboard: [
       [
-        iconButton("Best", `q:${id}:best`, "fire", "primary"),
-        iconButton("1080p", `q:${id}:1080`, "hd", "primary"),
+        iconButton(bestLabel, `q:${id}:best`, "fire", "primary"),
+        iconButton(p1080Label, `q:${id}:1080`, "hd", "primary"),
       ],
       [
-        iconButton("720p", `q:${id}:720`, "p720"),
-        iconButton("480p", `q:${id}:480`, "p480"),
+        iconButton(p720Label, `q:${id}:720`, "p720"),
+        iconButton(p480Label, `q:${id}:480`, "p480"),
       ],
       [
-        iconButton("MP3 audio", `q:${id}:audio`, "audio", "success"),
+        iconButton(audioLabel, `q:${id}:audio`, "audio", "success"),
         iconButton("Cancel", `x:${id}`, "cancel", "danger"),
       ],
     ],
@@ -101,9 +107,19 @@ function infoCard(info) {
     `${pe("quote")} <b>${esc(info.title)}</b>`,
     `${pe("clock")} ${esc(formatDuration(info.duration))}`,
     `${pe("internet")} ${esc(info.extractor)}`,
-    "",
-    `${pe("target")} Pick a format`,
   ];
+  const sizes = info.sizes || {};
+  const entries = [];
+  if (sizes.best) entries.push(`Best: ${sizes.best}`);
+  if (sizes["1080"]) entries.push(`1080p: ${sizes["1080"]}`);
+  if (sizes["720"]) entries.push(`720p: ${sizes["720"]}`);
+  if (sizes["480"]) entries.push(`480p: ${sizes["480"]}`);
+  if (sizes.audio) entries.push(`MP3: ${sizes.audio}`);
+  if (entries.length > 0) {
+    lines.push(`${pe("file")} ${entries.map((e) => `<b>${esc(e)}</b>`).join(" · ")}`);
+  }
+  lines.push("");
+  lines.push(`${pe("target")} Pick a format`);
   return lines.join("\n");
 }
 
@@ -240,7 +256,7 @@ export function createBot(config) {
           await ctx.replyWithPhoto(info.thumbnail, {
             caption,
             ...PARSE_HTML,
-            reply_markup: qualityKeyboard(id),
+            reply_markup: qualityKeyboard(id, info.sizes),
           });
           return;
         }
@@ -253,7 +269,7 @@ export function createBot(config) {
         status.message_id,
         undefined,
         caption,
-        { ...PARSE_HTML, reply_markup: qualityKeyboard(id) },
+        { ...PARSE_HTML, reply_markup: qualityKeyboard(id, info.sizes) },
       );
     } catch (err) {
       log("error", "probe failed", { err: err.message });
@@ -458,8 +474,10 @@ function qualityLabel(q) {
 }
 
 function formatSize(bytes) {
+  if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return "";
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 function filenameFor(title, ext) {

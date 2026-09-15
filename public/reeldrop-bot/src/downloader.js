@@ -23,6 +23,80 @@ export function formatDuration(sec) {
   return `${m}:${String(r).padStart(2, "0")}`;
 }
 
+export function formatSize(bytes) {
+  if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return "";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+export function estimateQualitySizes(info) {
+  if (!info) return {};
+  const formats = Array.isArray(info.formats) ? info.formats : [];
+  const duration = Number(info.duration) || 0;
+
+  function getFormatSize(f) {
+    if (!f) return null;
+    if (f.filesize && f.filesize > 0) return f.filesize;
+    if (f.filesize_approx && f.filesize_approx > 0) return f.filesize_approx;
+    const bitrate = f.tbr || ((f.vbr || 0) + (f.abr || 0));
+    if (bitrate && bitrate > 0 && duration > 0) {
+      return Math.round((bitrate * 1000 / 8) * duration);
+    }
+    return null;
+  }
+
+  const audioOnly = formats.filter(
+    (f) => f.vcodec === "none" && f.acodec && f.acodec !== "none",
+  );
+  audioOnly.sort((a, b) => (b.abr || b.tbr || 0) - (a.abr || a.tbr || 0));
+  const bestAudio = audioOnly[0];
+  const audioSize = bestAudio ? getFormatSize(bestAudio) : null;
+
+  const videoStreams = formats.filter((f) => f.vcodec && f.vcodec !== "none" && f.height);
+
+  function findSizeForHeight(targetH, exact = false) {
+    const pool = exact
+      ? videoStreams.filter((f) => f.height === targetH)
+      : videoStreams.filter((f) => f.height <= targetH);
+
+    if (!pool.length) return null;
+
+    pool.sort((a, b) => (b.height || 0) - (a.height || 0) || (b.tbr || 0) - (a.tbr || 0));
+    const bestF = pool[0];
+    const vSize = getFormatSize(bestF);
+    if (!vSize) return null;
+
+    const isMuxed = bestF.acodec && bestF.acodec !== "none";
+    return isMuxed ? vSize : vSize + (audioSize || 0);
+  }
+
+  const maxH = videoStreams.reduce((max, f) => Math.max(max, f.height || 0), 0);
+
+  const bestBytes =
+    findSizeForHeight(1080) || findSizeForHeight(9999) || info.filesize || info.filesize_approx;
+  const p1080Bytes = maxH >= 1080 ? (findSizeForHeight(1080, true) || findSizeForHeight(1080)) : null;
+  const p720Bytes = maxH >= 720 ? (findSizeForHeight(720, true) || findSizeForHeight(720)) : null;
+  const p480Bytes = maxH >= 480 ? (findSizeForHeight(480, true) || findSizeForHeight(480)) : null;
+
+  const finalAudioBytes =
+    audioSize || (duration > 0 ? Math.round((128 * 1000 / 8) * duration) : null);
+
+  const sizes = {
+    best: formatSize(bestBytes),
+    "1080": formatSize(p1080Bytes),
+    "720": formatSize(p720Bytes),
+    "480": formatSize(p480Bytes),
+    audio: formatSize(finalAudioBytes),
+  };
+
+  if (!sizes.best && (info.filesize || info.filesize_approx)) {
+    sizes.best = formatSize(info.filesize || info.filesize_approx);
+  }
+
+  return sizes;
+}
+
 export async function probe(config, url) {
   const { stdout } = await spawnYtDlp(
     config,
@@ -46,6 +120,7 @@ export async function probe(config, url) {
     webpageUrl: info.webpage_url || url,
     width: info.width ?? null,
     height: info.height ?? null,
+    sizes: estimateQualitySizes(info),
   };
 }
 
