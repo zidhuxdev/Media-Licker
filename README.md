@@ -378,8 +378,6 @@ The demo simulates the chat flow in the browser. It does not send URLs to the bo
 │   └── styles.css
 ├── migrations/                   # Platform/auth migration assets
 ├── scripts/                      # Build, preview, migration, and QA tooling
-├── screenshots/                  # Product/preview screenshots
-├── startup.sh                    # Preview restart contract
 ├── package.json                  # Root web-app scripts and dependencies
 └── vite.config.ts                # Root Vite/TanStack configuration
 ```
@@ -416,7 +414,6 @@ When changing deployment behavior, also review:
 - [`bot/railway.toml`](./bot/railway.toml)
 - [`telegram-bot-api/README.md`](./telegram-bot-api/README.md)
 - [`bgutil-provider/README.md`](./bgutil-provider/README.md)
-- [`startup.sh`](./startup.sh)
 
 ## Operational guidance
 
